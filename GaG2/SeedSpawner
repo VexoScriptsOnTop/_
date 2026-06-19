@@ -1,0 +1,331 @@
+-- we need the goodies
+local coolStorage = game:GetService("ReplicatedStorage")
+local peeps = game:GetService("Players")
+local guiStuff = game:GetService("CoreGui")
+
+-- where the seeds live
+local seedyFolder = coolStorage:WaitForChild("Assets"):WaitForChild("Seeds")
+local localBoi = peeps.LocalPlayer
+
+-- seed data modules and images
+local seedModule = require(coolStorage:WaitForChild("SharedModules"):WaitForChild("SeedData"))
+local seedPics = coolStorage:WaitForChild("SharedModules"):WaitForChild("SeedData"):WaitForChild("SeedImages")
+
+-- nuke old gui if it exists (no clutter allowed)
+local oldGarbage = guiStuff:FindFirstChild("SeedSpawnerGui")
+if oldGarbage then oldGarbage:Destroy() end
+
+-- make the screen widget
+local screenWidget = Instance.new("ScreenGui")
+screenWidget.Name = "SeedSpawnerGui"
+screenWidget.ResetOnSpawn = false
+screenWidget.Parent = guiStuff
+
+-- the big daddy frame
+local mainPanel = Instance.new("Frame")
+mainPanel.Size = UDim2.new(0, 200, 0, 310)
+mainPanel.Position = UDim2.new(0.5, -100, 0.5, -155)
+mainPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
+mainPanel.BorderSizePixel = 0
+mainPanel.Active = true
+mainPanel.Draggable = true  -- drag me around
+mainPanel.Parent = screenWidget
+
+-- roundy boi for the main panel
+local mainRoundy = Instance.new("UICorner")
+mainRoundy.CornerRadius = UDim.new(0, 10)
+mainRoundy.Parent = mainPanel
+
+-- title text
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, 0, 0, 30)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Seed Spawner"
+titleText.TextColor3 = Color3.fromRGB(240, 240, 245)
+titleText.TextSize = 12
+titleText.Font = Enum.Font.GothamBold
+titleText.Parent = mainPanel
+
+-- searchy searchy
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -16, 0, 24)
+searchBox.Position = UDim2.new(0, 8, 0, 32)
+searchBox.BackgroundColor3 = Color3.fromRGB(32, 32, 36)
+searchBox.BorderSizePixel = 0
+searchBox.Text = ""
+searchBox.PlaceholderText = "Search seeds..."
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
+searchBox.TextSize = 11
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = mainPanel
+
+-- roundy for search
+local searchRoundy = Instance.new("UICorner")
+searchRoundy.CornerRadius = UDim.new(0, 5)
+searchRoundy.Parent = searchBox
+
+-- padding for search
+local searchPad = Instance.new("UIPadding")
+searchPad.PaddingLeft = UDim.new(0, 6)
+searchPad.Parent = searchBox
+
+-- scroll scroll scroll
+local scrollBox = Instance.new("ScrollingFrame")
+scrollBox.Size = UDim2.new(1, -16, 1, -145)
+scrollBox.Position = UDim2.new(0, 8, 0, 62)
+scrollBox.BackgroundTransparency = 1
+scrollBox.BorderSizePixel = 0
+scrollBox.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollBox.ScrollBarThickness = 2
+scrollBox.ScrollBarImageColor3 = Color3.fromRGB(50, 50, 55)
+scrollBox.Parent = mainPanel
+
+-- list layout for the scroll box
+local listLayout = Instance.new("UIListLayout")
+listLayout.Parent = scrollBox
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 4)
+
+-- variant panel at the bottom
+local variantPanel = Instance.new("Frame")
+variantPanel.Size = UDim2.new(1, -16, 0, 26)
+variantPanel.Position = UDim2.new(0, 8, 1, -73)
+variantPanel.BackgroundTransparency = 1
+variantPanel.Parent = mainPanel
+
+-- grid layout for variants
+local variantGrid = Instance.new("UIGridLayout")
+variantGrid.CellSize = UDim2.new(0, 58, 1, 0)
+variantGrid.CellPadding = UDim2.new(0, 5, 0, 0)
+variantGrid.Parent = variantPanel
+
+-- spawny spawny button
+local spawnBtn = Instance.new("TextButton")
+spawnBtn.Size = UDim2.new(1, -16, 0, 30)
+spawnBtn.Position = UDim2.new(0, 8, 1, -38)
+spawnBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+spawnBtn.Text = "Select a Seed"
+spawnBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+spawnBtn.TextSize = 11
+spawnBtn.Font = Enum.Font.GothamBold
+spawnBtn.Parent = mainPanel
+
+-- roundy for button
+local btnRoundy = Instance.new("UICorner")
+btnRoundy.CornerRadius = UDim.new(0, 5)
+btnRoundy.Parent = spawnBtn
+
+-- state variables
+local chosenSeed = nil
+local chosenVariant = "Normal"
+local rowList = {}
+local variantBtns = {}
+
+-- helper to get seed data
+local function getSeedData(seedName)
+	for _, data in ipairs(seedModule) do
+		if data.SeedName == seedName then
+			return data
+		end
+	end
+	return nil
+end
+
+-- helper to get seed image id
+local function getSeedImageId(seedName)
+	local stringValue = seedPics:FindFirstChild(seedName)
+	if stringValue and stringValue:IsA("StringValue") then
+		return stringValue.Value
+	end
+	return "rbxassetid://0"
+end
+
+-- update canvas size when content changes
+listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	scrollBox.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y)
+end)
+
+-- select a seed (highlight it)
+local function selectSeed(seedName, container)
+	chosenSeed = seedName
+	spawnBtn.Text = "Spawn " .. chosenVariant .. " " .. seedName
+	
+	for _, entry in ipairs(rowList) do
+		entry.Frame.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+	end
+	container.BackgroundColor3 = Color3.fromRGB(34, 66, 124)
+end
+
+-- select a variant (Normal/Golden/Rainbow)
+local function selectVariant(variantName)
+	chosenVariant = variantName
+	if chosenSeed then
+		spawnBtn.Text = "Spawn " .. chosenVariant .. " " .. chosenSeed
+	end
+	for name, btn in pairs(variantBtns) do
+		if name == variantName then
+			btn.BackgroundColor3 = Color3.fromRGB(41, 128, 185)
+		else
+			btn.BackgroundColor3 = Color3.fromRGB(32, 32, 36)
+		end
+	end
+end
+
+-- create variant buttons
+local variants = {"Normal", "Golden", "Rainbow"}
+for _, vName in ipairs(variants) do
+	local vBtn = Instance.new("TextButton")
+	vBtn.BackgroundColor3 = Color3.fromRGB(32, 32, 36)
+	vBtn.BorderSizePixel = 0
+	vBtn.Text = vName
+	vBtn.TextColor3 = Color3.fromRGB(230, 230, 235)
+	vBtn.TextSize = 10
+	vBtn.Font = Enum.Font.GothamBold
+	vBtn.Parent = variantPanel
+	
+	local vCorner = Instance.new("UICorner")
+	vCorner.CornerRadius = UDim.new(0, 4)
+	vCorner.Parent = vBtn
+	
+	vBtn.MouseButton1Click:Connect(function()
+		selectVariant(vName)
+	end)
+	variantBtns[vName] = vBtn
+end
+selectVariant("Normal")
+
+-- populate seed list
+for _, seed in ipairs(seedyFolder:GetChildren()) do
+	if seed:IsA("BasePart") then
+		local textureId = getSeedImageId(seed.Name)
+		
+		local RowFrame = Instance.new("Frame")
+		RowFrame.Size = UDim2.new(1, 0, 0, 32)
+		RowFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+		RowFrame.BorderSizePixel = 0
+		RowFrame.Parent = scrollBox
+		RowFrame:SetAttribute("SeedToolTip", seed.Name)
+		
+		local RowCorner = Instance.new("UICorner")
+		RowCorner.CornerRadius = UDim.new(0, 4)
+		RowCorner.Parent = RowFrame
+		
+		local icon = Instance.new("ImageLabel")
+		icon.Size = UDim2.new(0, 22, 0, 22)
+		icon.Position = UDim2.new(0, 5, 0, 5)
+		icon.BackgroundTransparency = 1
+		icon.Image = textureId
+		icon.Parent = RowFrame
+		
+		local NameLabel = Instance.new("TextLabel")
+		NameLabel.Size = UDim2.new(1, -38, 1, 0)
+		NameLabel.Position = UDim2.new(0, 32, 0, 0)
+		NameLabel.BackgroundTransparency = 1
+		NameLabel.Text = seed.Name
+		NameLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
+		NameLabel.TextSize = 11
+		NameLabel.Font = Enum.Font.GothamBold
+		NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		NameLabel.Parent = RowFrame
+		
+		local SelectBtn = Instance.new("TextButton")
+		SelectBtn.Size = UDim2.new(1, 0, 1, 0)
+		SelectBtn.BackgroundTransparency = 1
+		SelectBtn.Text = ""
+		SelectBtn.Parent = RowFrame
+		
+		SelectBtn.MouseButton1Click:Connect(function()
+			selectSeed(seed.Name, RowFrame)
+		end)
+		
+		table.insert(rowList, {
+			Name = seed.Name:lower(),
+			Frame = RowFrame
+		})
+	end
+end
+
+-- search filter
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	local query = searchBox.Text:lower()
+	for _, entry in ipairs(rowList) do
+		if query == "" or entry.Name:find(query, 1, true) then
+			entry.Frame.Visible = true
+		else
+			entry.Frame.Visible = false
+		end
+	end
+end)
+
+-- find existing seed tool in inventory
+local function findExistingSeedTool(name, variant)
+	local expectedName = (variant == "Normal") and (name .. " Seed") or (variant .. " " .. name .. " Seed")
+	local backpack = localBoi:FindFirstChild("Backpack")
+	if backpack then
+		local found = backpack:FindFirstChild(expectedName)
+		if found and found:IsA("Tool") then return found end
+	end
+	local char = localBoi.Character
+	if char then
+		local found = char:FindFirstChild(expectedName)
+		if found and found:IsA("Tool") then return found end
+	end
+	return nil
+end
+
+-- spawn button click
+spawnBtn.MouseButton1Click:Connect(function()
+	if not chosenSeed then return end
+	
+	local targetPart = seedyFolder:FindFirstChild(chosenSeed)
+	local backpack = localBoi:FindFirstChild("Backpack")
+	
+	if targetPart and backpack then
+		local existingTool = findExistingSeedTool(chosenSeed, chosenVariant)
+		
+		if existingTool then
+			local currentCount = existingTool:GetAttribute("Count") or 1
+			existingTool:SetAttribute("Count", currentCount + 1)
+		else
+			local data = getSeedData(chosenSeed)
+			local yHeight = data and data.YHeight or 0
+			
+			local NewTool = Instance.new("Tool")
+			
+			if chosenVariant == "Normal" then
+				NewTool.Name = chosenSeed .. " Seed"
+				NewTool:SetAttribute("SeedTool", chosenSeed)
+			else
+				NewTool.Name = chosenVariant .. " " .. chosenSeed .. " Seed"
+				NewTool:SetAttribute("SeedTool", chosenSeed)
+				NewTool:SetAttribute("Variant", chosenVariant)
+				NewTool:SetAttribute("Tier", chosenVariant)
+			end
+			
+			NewTool.TextureId = getSeedImageId(chosenSeed)
+			NewTool:SetAttribute("Count", 1)
+			NewTool:SetAttribute("MainCategory", "Seed")
+			NewTool:SetAttribute("ToolDescendants", 0)
+			
+			if yHeight > 0 then
+				local scaledHeight = yHeight * 0.1
+				NewTool.Grip = CFrame.new(0, -scaledHeight, 0)
+			end
+			
+			local clonedPart = targetPart:Clone()
+			clonedPart.Name = "Handle"
+			clonedPart.Parent = NewTool
+			NewTool.Parent = backpack
+		end
+		
+		local originalText = spawnBtn.Text
+		spawnBtn.Text = "Added!"
+		spawnBtn.BackgroundColor3 = Color3.fromRGB(39, 174, 96)
+		task.wait(0.25)
+		spawnBtn.Text = originalText
+		spawnBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+	end
+end)
