@@ -23,17 +23,6 @@ local garbageBin = workspace:FindFirstChild("Temporary") or workspace
 -- the magic word we search for in part names
 local secretWord = "PlantAreaColumn"
 
--- the exact lil fingerprint size of a real plant column
-local columnDimensions = Vector3.new(44, 0.5, 15.999893188476562)
-local wiggleRoom = 0.05
-
--- checks if a size is basically the column size (floats are sneaky liars)
-local function isItColumnSize(size)
-	return math.abs(size.X - columnDimensions.X) <= wiggleRoom
-		and math.abs(size.Y - columnDimensions.Y) <= wiggleRoom
-		and math.abs(size.Z - columnDimensions.Z) <= wiggleRoom
-end
-
 -- nuke old gui if it exists (no clutter allowed)
 local oldTrash = screenJunk:FindFirstChild("SeedSpawnerGui")
 if oldTrash then oldTrash:Destroy() end
@@ -46,8 +35,8 @@ mainScreen.Parent = screenJunk
 
 -- the big daddy frame
 local bigFrame = Instance.new("Frame")
-bigFrame.Size = UDim2.new(0, 200, 0, 310)
-bigFrame.Position = UDim2.new(0.5, -100, 0.5, -155)
+bigFrame.Size = UDim2.new(0, 200, 0, 280)
+bigFrame.Position = UDim2.new(0.5, -100, 0.5, -140)
 bigFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
 bigFrame.BorderSizePixel = 0
 bigFrame.Active = true
@@ -97,7 +86,7 @@ findPad.Parent = findBox
 
 -- scroll scroll scroll
 local scrollThing = Instance.new("ScrollingFrame")
-scrollThing.Size = UDim2.new(1, -16, 1, -145)
+scrollThing.Size = UDim2.new(1, -16, 1, -106)
 scrollThing.Position = UDim2.new(0, 8, 0, 62)
 scrollThing.BackgroundTransparency = 1
 scrollThing.BorderSizePixel = 0
@@ -111,19 +100,6 @@ local listSorter = Instance.new("UIListLayout")
 listSorter.Parent = scrollThing
 listSorter.SortOrder = Enum.SortOrder.LayoutOrder
 listSorter.Padding = UDim.new(0, 4)
-
--- variant panel at the bottom
-local variantArea = Instance.new("Frame")
-variantArea.Size = UDim2.new(1, -16, 0, 26)
-variantArea.Position = UDim2.new(0, 8, 1, -73)
-variantArea.BackgroundTransparency = 1
-variantArea.Parent = bigFrame
-
--- grid layout for variants
-local variantGridLayout = Instance.new("UIGridLayout")
-variantGridLayout.CellSize = UDim2.new(0, 58, 1, 0)
-variantGridLayout.CellPadding = UDim2.new(0, 5, 0, 0)
-variantGridLayout.Parent = variantArea
 
 -- spawny spawny button
 local spawnButton = Instance.new("TextButton")
@@ -143,9 +119,7 @@ buttonRoundy.Parent = spawnButton
 
 -- state variables
 local selectedSeed = nil
-local selectedVariant = "Normal"
 local rowTable = {}
-local variantButtonTable = {}
 
 -- helper to get seed data
 local function getSeedInfo(seedName)
@@ -174,51 +148,13 @@ end)
 -- select a seed (highlight it)
 local function pickSeed(seedName, container)
 	selectedSeed = seedName
-	spawnButton.Text = "Spawn " .. selectedVariant .. " " .. seedName
+	spawnButton.Text = "Spawn " .. seedName
 	
 	for _, entry in ipairs(rowTable) do
 		entry.Frame.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
 	end
 	container.BackgroundColor3 = Color3.fromRGB(34, 66, 124)
 end
-
--- select a variant (Normal/Golden/Rainbow)
-local function pickVariant(variantName)
-	selectedVariant = variantName
-	if selectedSeed then
-		spawnButton.Text = "Spawn " .. selectedVariant .. " " .. selectedSeed
-	end
-	for name, btn in pairs(variantButtonTable) do
-		if name == variantName then
-			btn.BackgroundColor3 = Color3.fromRGB(41, 128, 185)
-		else
-			btn.BackgroundColor3 = Color3.fromRGB(32, 32, 36)
-		end
-	end
-end
-
--- create variant buttons
-local variantOptions = {"Normal", "Golden", "Rainbow"}
-for _, vName in ipairs(variantOptions) do
-	local variantButton = Instance.new("TextButton")
-	variantButton.BackgroundColor3 = Color3.fromRGB(32, 32, 36)
-	variantButton.BorderSizePixel = 0
-	variantButton.Text = vName
-	variantButton.TextColor3 = Color3.fromRGB(230, 230, 235)
-	variantButton.TextSize = 10
-	variantButton.Font = Enum.Font.GothamBold
-	variantButton.Parent = variantArea
-	
-	local variantCorner = Instance.new("UICorner")
-	variantCorner.CornerRadius = UDim.new(0, 4)
-	variantCorner.Parent = variantButton
-	
-	variantButton.MouseButton1Click:Connect(function()
-		pickVariant(vName)
-	end)
-	variantButtonTable[vName] = variantButton
-end
-pickVariant("Normal")
 
 -- populate seed list
 for _, seed in ipairs(seedNest:GetChildren()) do
@@ -284,8 +220,8 @@ findBox:GetPropertyChangedSignal("Text"):Connect(function()
 end)
 
 -- find existing seed tool in inventory
-local function findExistingSeed(name, variant)
-	local expectedName = (variant == "Normal") and (name .. " Seed") or (variant .. " " .. name .. " Seed")
+local function findExistingSeed(name)
+	local expectedName = name .. " Seed"
 	local backpack = meMyself:FindFirstChild("Backpack")
 	if backpack then
 		local found = backpack:FindFirstChild(expectedName)
@@ -331,7 +267,7 @@ end
 spawnButton.MouseButton1Click:Connect(function()
 	if not selectedSeed then return end
 	
-	local existingTool = findExistingSeed(selectedSeed, selectedVariant)
+	local existingTool = findExistingSeed(selectedSeed)
 	if existingTool then
 		local currentCount = existingTool:GetAttribute("Count") or 1
 		existingTool:SetAttribute("Count", currentCount + 1)
@@ -344,16 +280,8 @@ spawnButton.MouseButton1Click:Connect(function()
 			local yHeight = data and data.YHeight or 0
 			
 			local NewTool = Instance.new("Tool")
-			
-			if selectedVariant == "Normal" then
-				NewTool.Name = selectedSeed .. " Seed"
-				NewTool:SetAttribute("SeedTool", selectedSeed)
-			else
-				NewTool.Name = selectedVariant .. " " .. selectedSeed .. " Seed"
-				NewTool:SetAttribute("SeedTool", selectedSeed)
-				NewTool:SetAttribute("Variant", selectedVariant)
-				NewTool:SetAttribute("Tier", selectedVariant)
-			end
+			NewTool.Name = selectedSeed .. " Seed"
+			NewTool:SetAttribute("SeedTool", selectedSeed)
 			
 			NewTool.TextureId = getSeedPicture(selectedSeed)
 			NewTool:SetAttribute("Count", 1)
@@ -402,11 +330,10 @@ local function tryPlantingAt(targetPos)
 	end
 end
 
--- checks if THIS exact part is a real plantable column, name AND size both gotta match
+-- checks if THIS exact part is a real plantable column, name match only
 local function isItPlantColumn(part)
 	if not part or not part:IsA("BasePart") then return false end
-	if not part.Name:lower():find(secretWord:lower(), 1, true) then return false end
-	return isItColumnSize(part.Size)
+	return part.Name:lower():find(secretWord:lower(), 1, true) ~= nil
 end
 
 -- detect clicks, raycast has to land directly on the real column part, no nearby guessing
