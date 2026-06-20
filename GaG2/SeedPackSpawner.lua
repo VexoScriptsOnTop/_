@@ -25,14 +25,6 @@ local tempFolder = workspace:FindFirstChild("Temporary") or workspace
 
 -- magic word go brrr
 local dirtKeyword = "PlantAreaColumn"
-local columnSize = Vector3.new(44, 0.5, 15.999893188476562)
-local sizeWiggleRoom = 0.05
-
-local function isColumnSize(size)
-	return math.abs(size.X - columnSize.X) <= sizeWiggleRoom
-		and math.abs(size.Y - columnSize.Y) <= sizeWiggleRoom
-		and math.abs(size.Z - columnSize.Z) <= sizeWiggleRoom
-end
 
 -- zoom lookups
 local seedLookup = {}
@@ -362,7 +354,7 @@ local function showWonSeedBillboard(worldPos, seedName)
 	end)
 end
 
--- HOW HIGH THE WHOLE SHOW FLOATS, bump this if it still feels low
+-- HOW HIGH THE WHOLE SHOW FLOATS
 local floatHeight = -1.5
 local currentCircleAngle = 0
 
@@ -442,7 +434,6 @@ local function playFakePackOpenFx(openPos, packModel, wonSeed)
 		end
 	end
 
-	-- billboard floats at the same height now, not on the ground
 	showWonSeedBillboard(floatPos, wonSeed)
 
 	task.delay(0.6, function()
@@ -552,8 +543,7 @@ end
 
 local function isPlantColumn(part)
 	if not part or not part:IsA("BasePart") then return false end
-	if not part.Name:lower():find(dirtKeyword:lower(), 1, true) then return false end
-	return isColumnSize(part.Size)
+	return part.Name:lower():find(dirtKeyword:lower(), 1, true) ~= nil
 end
 
 local packOpenLock = false
@@ -598,9 +588,6 @@ local function openPackTool(packTool, openPos)
 	end)
 end
 
--- EQUIP DEBOUNCE, the actual fix for "opens as soon as I hold it"
--- tracks which tool is currently the equipped one, and refuses to let it open
--- for a short grace period right after becoming equipped, no matter what fires
 local equippedToolTracker = nil
 local equipGraceUntil = {}
 local equipGraceSeconds = 0.35
@@ -647,7 +634,6 @@ localBoi.ChildAdded:Connect(function(child)
 	end
 end)
 
--- checks if a tool is allowed to open right now, false during its equip grace period
 local function canToolOpenNow(tool)
 	local graceEnd = equipGraceUntil[tool]
 	if graceEnd and os.clock() < graceEnd then
