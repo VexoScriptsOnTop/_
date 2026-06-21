@@ -354,16 +354,49 @@ local function showWonSeedBillboard(worldPos, seedName)
 	end)
 end
 
--- HOW HIGH THE WHOLE SHOW FLOATS
+-- how floaty the whole circus is
 local floatHeight = -1.5
-local currentCircleAngle = 0
+
+-- chaos zone settings, no boring circle math allowed
+local minRadiusFromPlayer = 5
+local maxRadiusFromPlayer = 9
+local minDistBetweenOpenings = 4.5
+local maxSpreadAttempts = 12
+
+-- where all the current pack parties are happening rn
+local activeOpenSpots = {}
+
+-- throws darts at a map until one lands far enough from everything else
+local function rollSpreadPosition(originPos)
+	for _ = 1, maxSpreadAttempts do
+		local angle = math.random() * math.pi * 2
+		local radius = minRadiusFromPlayer + math.random() * (maxRadiusFromPlayer - minRadiusFromPlayer)
+		local candidate = originPos + Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+
+		local tooClose = false
+		for _, otherPos in ipairs(activeOpenSpots) do
+			if (candidate - otherPos).Magnitude < minDistBetweenOpenings then
+				tooClose = true
+				break
+			end
+		end
+
+		if not tooClose then
+			return candidate
+		end
+	end
+
+	-- dart throwing failed, just yeet it further out
+	local angle = math.random() * math.pi * 2
+	local radius = maxRadiusFromPlayer + minDistBetweenOpenings
+	return originPos + Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+end
 
 local function playFakePackOpenFx(openPos, packModel, wonSeed)
-	currentCircleAngle = (currentCircleAngle + 45) % 360
-	local rad = math.rad(currentCircleAngle)
-	local radius = 4
-	
-	local floatPos = openPos + Vector3.new(math.cos(rad) * radius, floatHeight, math.sin(rad) * radius)
+	local spreadPos = rollSpreadPosition(openPos)
+	local floatPos = spreadPos + Vector3.new(0, floatHeight, 0)
+
+	table.insert(activeOpenSpots, spreadPos)
 
 	local fxModel = packModel:Clone()
 
@@ -438,6 +471,11 @@ local function playFakePackOpenFx(openPos, packModel, wonSeed)
 
 	task.delay(0.6, function()
 		fxModel:Destroy()
+		-- party's over, free up this spot for the next pack
+		local idx = table.find(activeOpenSpots, spreadPos)
+		if idx then
+			table.remove(activeOpenSpots, idx)
+		end
 	end)
 end
 
@@ -588,6 +626,7 @@ local function openPackTool(packTool, openPos)
 	end)
 end
 
+-- the "no opening fr fr the second you blink" prevention squad
 local equippedToolTracker = nil
 local equipGraceUntil = {}
 local equipGraceSeconds = 0.35
@@ -657,6 +696,7 @@ local function getAimPoint()
 	return rayResult
 end
 
+-- mouse clicky handling
 inputBoi.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
@@ -680,6 +720,7 @@ inputBoi.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
+-- finger touchy handling, gotta be careful with this one
 local touchStartPos = nil
 local touchStartTime = 0
 local touchStartCamCFrame = nil
